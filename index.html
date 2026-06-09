@@ -178,7 +178,7 @@ async function handleSubmit() {
   const items = getAllItems(checkType);
 
   // 미응답 항목 체크 - 전체 응답 필수
-  const unanswered = items.filter(i => !checkState[i.id]);
+  const unanswered = items.filter(i => !checkState[i.id]); // na 포함 - na도 응답으로 간주
   if (unanswered.length > 0) {
     // 미응답 항목 빨간 테두리 표시
     items.forEach(item => {
@@ -271,7 +271,7 @@ function exportCSV() {
     cl.categories.forEach(cat => {
       cat.items.forEach(item => {
         const r   = rec.results?.[item.id] || "";
-        const resultLabel = r==="yes"?"예":r==="no"?"아니오":r==="na"?"해당없음":"";
+        const resultLabel = r==="na"?"해당없음":r?r+"점":"";
         let extra="", deadline="", completed="";
         if (rec.type==="daily")   extra = rec.memos?.[item.id]||"";
         if (rec.type==="weekly")  extra = rec.weeklyImprove?.[item.id]||"";
@@ -326,14 +326,15 @@ function setCheckType(type) {
 function renderCheckTab() {
   const cl    = CHECKLISTS[checkType];
   const items = getAllItems(checkType);
-  const yes   = items.filter(i=>checkState[i.id]==="yes").length;
-  const no    = items.filter(i=>checkState[i.id]==="no").length;
-  const na    = items.filter(i=>checkState[i.id]==="na").length;
-  const total = items.length;
+  const scored = items.filter(i=>checkState[i.id] && checkState[i.id]!=="na");
+  const na     = items.filter(i=>checkState[i.id]==="na").length;
+  const answered = items.filter(i=>checkState[i.id]).length;
+  const total  = items.length;
+  const avgScore = scored.length ? (scored.reduce((s,i)=>s+Number(checkState[i.id]),0)/scored.length).toFixed(1) : "-";
 
   document.getElementById("sum-total").textContent = total;
-  document.getElementById("sum-yes").textContent   = yes;
-  document.getElementById("sum-no").textContent    = no;
+  document.getElementById("sum-yes").textContent   = answered;
+  document.getElementById("sum-avg").textContent   = avgScore;
   document.getElementById("sum-na").textContent    = na;
   document.getElementById("edit-banner").style.display = editingId?"":"none";
 
@@ -360,9 +361,15 @@ function renderCheckTab() {
           <div class="item-content">
             <div class="item-txt">${item.text}</div>
             <div class="ans-row">
-              <button class="ans-btn ${st==='yes'?'ans-yes':''}" onclick="setCheck('${item.id}','yes')">✓ 예</button>
-              <button class="ans-btn ${st==='no'?'ans-no':''}"  onclick="setCheck('${item.id}','no')">✕ 아니오</button>
-              <button class="ans-btn ${st==='na'?'ans-na':''}"  onclick="setCheck('${item.id}','na')">— 해당없음</button>
+              <button class="ans-btn score-btn ${st==='1'?'score-active score-1':''}" onclick="setCheck('${item.id}','1')" title="1점 - 매우 부족">1</button>
+              <button class="ans-btn score-btn ${st==='2'?'score-active score-2':''}" onclick="setCheck('${item.id}','2')" title="2점 - 부족">2</button>
+              <button class="ans-btn score-btn ${st==='3'?'score-active score-3':''}" onclick="setCheck('${item.id}','3')" title="3점 - 보통">3</button>
+              <button class="ans-btn score-btn ${st==='4'?'score-active score-4':''}" onclick="setCheck('${item.id}','4')" title="4점 - 양호">4</button>
+              <button class="ans-btn score-btn ${st==='5'?'score-active score-5':''}" onclick="setCheck('${item.id}','5')" title="5점 - 매우 우수">5</button>
+              <button class="ans-btn ${st==='na'?'ans-na':''}" onclick="setCheck('${item.id}','na')" style="margin-left:6px">— 해당없음</button>
+            </div>
+            <div class="score-hint">
+              <span>1 매우부족</span><span>2 부족</span><span>3 보통</span><span>4 양호</span><span>5 매우우수</span>
             </div>
             ${extraHtml}
           </div>
@@ -381,8 +388,6 @@ function renderCheckTab() {
           <div class="cat-sub">${cat.items.length}개 항목</div>
         </div>
         <div class="prog-wrap">
-          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${pColor}"></div></div>
-          <span class="prog-txt">${done}/${cat.items.length}</span>
           <span class="arrow" style="transform:${open?'rotate(0)':'rotate(-90deg)'}"">▾</span>
         </div>
       </div>
@@ -466,17 +471,17 @@ function renderRecords() {
     const cl = CHECKLISTS[rec.type];
     if(!cl) return "";
     const items = getAllItems(rec.type);
-    const rYes=items.filter(i=>rec.results?.[i.id]==="yes").length;
-    const rNo =items.filter(i=>rec.results?.[i.id]==="no").length;
-    const rNa =items.filter(i=>rec.results?.[i.id]==="na").length;
-    const ans=rYes+rNo+rNa;
-    const noItems=items.filter(i=>rec.results?.[i.id]==="no");
-    const badgeClass=rNo>0?"badge-fail":ans===items.length?"badge-pass":"badge-inc";
-    const badgeTxt  =rNo>0?"⚠ 아니오 있음":ans===items.length?"✓ 완료":"⏳ 부분점검";
-    const noBox=noItems.length?`
+    const rNa   = items.filter(i=>rec.results?.[i.id]==="na").length;
+    const scored= items.filter(i=>rec.results?.[i.id] && rec.results[i.id]!=="na");
+    const ans   = items.filter(i=>rec.results?.[i.id]).length;
+    const avgScore = scored.length ? (scored.reduce((s,i)=>s+Number(rec.results[i.id]),0)/scored.length).toFixed(1) : "-";
+    const lowItems = items.filter(i=>rec.results?.[i.id]==="1"||rec.results?.[i.id]==="2");
+    const badgeClass= ans<items.length?"badge-inc": Number(avgScore)>=4?"badge-pass":Number(avgScore)>=2.5?"badge-inc":"badge-fail";
+    const badgeTxt  = ans<items.length?"⏳ 부분점검": Number(avgScore)>=4?"✓ 양호 이상":Number(avgScore)>=2.5?"△ 보통":"⚠ 개선 필요";
+    const noBox=lowItems.length?`
       <div class="ng-box">
-        <div class="ng-title">⚠ 아니오 항목</div>
-        ${noItems.map(i=>`<div>• ${i.text}</div>`).join('')}
+        <div class="ng-title">⚠ 1~2점 항목 (개선 필요)</div>
+        ${lowItems.map(i=>`<div>• ${i.text} <span style="color:#ef4444;font-weight:700">${rec.results[i.id]}점</span></div>`).join('')}
       </div>`:'';
     const delBtn=isAdmin?`<button class="btn btn-danger" onclick="deleteRecord('${rec._id}')">🗑 삭제</button>`:'';
     const typeBadge=`<span class="type-dot" style="background:${cl.color}">${cl.label}</span>`;
@@ -494,9 +499,9 @@ function renderRecords() {
           <span>✍ ${ans}/${items.length}</span>
         </div>
         <div class="stat-row">
-          <span class="stat-pill pill-yes">✓ 예 ${rYes}</span>
-          <span class="stat-pill pill-no">✕ 아니오 ${rNo}</span>
+          <span class="stat-pill pill-yes">📊 평균 ${avgScore}점</span>
           <span class="stat-pill pill-na">— 해당없음 ${rNa}</span>
+          <span class="stat-pill" style="background:rgba(59,130,246,0.15);color:#60a5fa">✍ ${ans}/${items.length}</span>
         </div>
         ${noBox}
         <div class="rec-actions">
@@ -523,8 +528,9 @@ function showDetail(rec) {
     html+=`<div class="detail-cat">${cat.icon} ${cat.title}</div>`;
     cat.items.forEach(item=>{
       const r=rec.results?.[item.id];
-      const color=r==="yes"?"#10b981":r==="no"?"#ef4444":"#64748b";
-      const lbl=r==="yes"?"✓ 예":r==="no"?"✕ 아니오":r==="na"?"— 해당없음":"미응답";
+      const scoreColor={"1":"#ef4444","2":"#f97316","3":"#f59e0b","4":"#84cc16","5":"#10b981"};
+      const color=r==="na"?"#64748b":r?scoreColor[r]||"#94a3b8":"#475569";
+      const lbl=r==="na"?"— 해당없음":r?`${r}점`:r===undefined?"미응답":"미응답";
       let extra="";
       if(rec.type==="daily"  &&rec.memos?.[item.id])          extra=`<div class="detail-extra">📝 ${rec.memos[item.id]}</div>`;
       if(rec.type==="weekly" &&rec.weeklyImprove?.[item.id])   extra=`<div class="detail-extra" style="color:#f59e0b">🔧 ${rec.weeklyImprove[item.id]}</div>`;
@@ -656,9 +662,16 @@ select.field-input option{background:#1a2235}
 /* ANSWER BUTTONS */
 .ans-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 .ans-btn{padding:7px 14px;border-radius:7px;border:1px solid #1e2d45;background:#1a2235;color:#64748b;cursor:pointer;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;transition:all .15s;white-space:nowrap}
-.ans-yes{border-color:#10b981!important;background:rgba(16,185,129,.2)!important;color:#10b981!important;font-weight:700!important}
-.ans-no {border-color:#ef4444!important;background:rgba(239,68,68,.2)!important;color:#ef4444!important;font-weight:700!important}
 .ans-na {border-color:#64748b!important;background:rgba(71,85,105,.2)!important;color:#94a3b8!important;font-weight:700!important}
+.score-btn{min-width:38px;font-size:15px;font-weight:700;font-family:monospace}
+.score-active{font-weight:900!important}
+.score-1{border-color:#ef4444!important;background:rgba(239,68,68,.2)!important;color:#ef4444!important}
+.score-2{border-color:#f97316!important;background:rgba(249,115,22,.2)!important;color:#f97316!important}
+.score-3{border-color:#f59e0b!important;background:rgba(245,158,11,.2)!important;color:#f59e0b!important}
+.score-4{border-color:#84cc16!important;background:rgba(132,204,22,.2)!important;color:#84cc16!important}
+.score-5{border-color:#10b981!important;background:rgba(16,185,129,.2)!important;color:#10b981!important}
+.score-hint{display:flex;gap:0;margin-top:5px;font-size:10px;color:#475569}
+.score-hint span{flex:1;text-align:center}
 
 /* EXTRA FIELDS */
 .extra-wrap{margin-top:8px}
@@ -781,8 +794,8 @@ input.pw-input{background:#1a2235;border:1px solid #1e2d45;border-radius:8px;pad
     <!-- 요약 -->
     <div class="summ-grid">
       <div class="summ-card"><div class="summ-num" id="sum-total" style="color:#3b82f6">0</div><div class="summ-lbl">전체 항목</div></div>
-      <div class="summ-card"><div class="summ-num" id="sum-yes"   style="color:#10b981">0</div><div class="summ-lbl">예</div></div>
-      <div class="summ-card"><div class="summ-num" id="sum-no"    style="color:#ef4444">0</div><div class="summ-lbl">아니오</div></div>
+      <div class="summ-card"><div class="summ-num" id="sum-yes"   style="color:#10b981">0</div><div class="summ-lbl">응답 완료</div></div>
+      <div class="summ-card"><div class="summ-num" id="sum-avg"   style="color:#f59e0b">-</div><div class="summ-lbl">평균 점수</div></div>
       <div class="summ-card"><div class="summ-num" id="sum-na"    style="color:#64748b">0</div><div class="summ-lbl">해당없음</div></div>
     </div>
 
