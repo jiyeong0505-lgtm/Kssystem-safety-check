@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>kssystem safety check</title>
+<title>KSSYSTEM SAFETY CHECK</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -176,8 +176,29 @@ onSnapshot(q, snap => {
 async function handleSubmit() {
   if (!dept) { showToast("소속/공정을 선택해주세요.", "error"); return; }
   const items = getAllItems(checkType);
-  const answered = items.filter(i => checkState[i.id]);
-  if (!answered.length) { showToast("최소 1개 이상 점검 결과를 입력해주세요.", "error"); return; }
+
+  // 미응답 항목 체크 - 전체 응답 필수
+  const unanswered = items.filter(i => !checkState[i.id]);
+  if (unanswered.length > 0) {
+    // 미응답 항목 빨간 테두리 표시
+    items.forEach(item => {
+      const el = document.getElementById("item-wrap-" + item.id);
+      if (!el) return;
+      if (!checkState[item.id]) {
+        el.style.background = "rgba(239,68,68,0.08)";
+        el.style.outline = "1px solid rgba(239,68,68,0.5)";
+        el.style.borderRadius = "8px";
+      } else {
+        el.style.background = "";
+        el.style.outline = "";
+      }
+    });
+    // 첫 번째 미응답 항목으로 스크롤
+    const firstEl = document.getElementById("item-wrap-" + unanswered[0].id);
+    if (firstEl) firstEl.scrollIntoView({ behavior:"smooth", block:"center" });
+    showToast("⚠ 미응답 항목 " + unanswered.length + "개\n모든 항목에 응답 후 저장해주세요.", "error");
+    return;
+  }
 
   if (!editingId) {
     const today = todayStr();
@@ -334,7 +355,7 @@ function renderCheckTab() {
       const st = checkState[item.id]||"";
       const extraHtml = buildExtraHtml(item.id);
       return `
-        <div class="check-item">
+        <div class="check-item" id="item-wrap-${item.id}">
           <div class="item-num">${idx+1}</div>
           <div class="item-content">
             <div class="item-txt">${item.text}</div>
@@ -421,6 +442,9 @@ function toggleCat(id) {
 function setCheck(itemId, type) {
   if (checkState[itemId]===type) delete checkState[itemId];
   else checkState[itemId]=type;
+  // 선택하면 빨간 테두리 즉시 제거
+  const el = document.getElementById("item-wrap-" + itemId);
+  if (el) { el.style.background=""; el.style.outline=""; }
   renderCheckTab();
 }
 
